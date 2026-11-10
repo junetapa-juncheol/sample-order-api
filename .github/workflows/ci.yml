@@ -4,7 +4,7 @@ permissions:
   contents: read
 jobs:
   verify:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:17-alpine
@@ -15,7 +15,8 @@ jobs:
         ports: ['5432:5432']
         options: --health-cmd "pg_isready -U bakery -d bakery" --health-interval 3s --health-timeout 3s --health-retries 20
       mongo:
-        image: mongo:8
+        # MongoDB 8.x refuses to start on Linux kernel 6.19+ (SERVER-121912)
+        image: mongo:7.0
         ports: ['27017:27017']
         options: --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'" --health-interval 3s --health-timeout 3s --health-retries 20
       redis:
