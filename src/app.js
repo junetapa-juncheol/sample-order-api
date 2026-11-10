@@ -3,13 +3,15 @@ const helmet = require('helmet');
 const {randomUUID,randomInt} = require('node:crypto');
 const {z} = require('zod');
 const {flushOutbox} = require('./outbox');
-const orderSchema = z.object({items:z.array(z.object({productId:z.number().int().positive(),quantity:z.number().int().min(1).max(20)}).strict()).min(1).max(10)}).strict();
+const {createHolidays} = require('./kr/holidays');
+const orderSchema = z.object({pickupDate:z.iso.date().optional(),items:z.array(z.object({productId:z.number().int().positive(),quantity:z.number().int().min(1).max(20)}).strict()).min(1).max(10)}).strict();
 const transitions = {received:'preparing',preparing:'ready',ready:'collected'};
 const failure = (status,message) => Object.assign(new Error(message),{status});
-const output = row => ({id:row.id,pickupCode:row.pickup_code,status:row.status,total:row.total,createdAt:row.created_at});
+const output = row => ({id:row.id,pickupCode:row.pickup_code,pickupDate:row.pickup_date || null,status:row.status,total:row.total,createdAt:row.created_at});
 
 function createApp(deps) {
   const {pg,redis,events} = deps;
+  const holidays=deps.holidays || createHolidays({redis});
   const app = express();
   app.use(helmet());
   app.use(express.json({limit:'16kb'}));
@@ -32,11 +34,13 @@ function createApp(deps) {
     const {rows} = await pg.query('SELECT * FROM orders ORDER BY created_at DESC LIMIT 100');
     res.json(rows.map(output));
   });
+  app.get('/api/pickup-days',async(req,res)=>res.json(await holidays.pickupDays(req.query.month)));
   app.post('/api/orders',async(req,res)=>{
     const parsed = orderSchema.safeParse(req.body);
     const key = req.get('Idempotency-Key');
     if (!parsed.success || !key || !/^[a-zA-Z0-9_-]{8,80}$/.test(key)) throw failure(400,'상품과 수량, 8~80자 Idempotency-Key를 확인해 주세요.');
     const items = parsed.data.items.sort((a,b)=>a.productId-b.productId);
+    const pickupDate=parsed.data.pickupDate || null;
     if(new Set(items.map(item=>item.productId)).size!==items.length) throw failure(400,'같은 상품은 한 번만 넣어 주세요.');
     const client = await pg.connect();
     let row;
@@ -48,8 +52,12 @@ function createApp(deps) {
       if(previous.rows.length) {
         row=previous.rows[0];replay=true;
         const saved = (await client.query('SELECT product_id,quantity FROM order_items WHERE order_id=$1 ORDER BY product_id',[row.id])).rows;
-        if(JSON.stringify(saved.map(i=>({productId:i.product_id,quantity:i.quantity})))!==JSON.stringify(items)) throw failure(409,'같은 요청 키에 다른 주문을 보낼 수 없습니다.');
+        if((row.pickup_date || null)!==pickupDate || JSON.stringify(saved.map(i=>({productId:i.product_id,quantity:i.quantity})))!==JSON.stringify(items)) throw failure(409,'같은 요청 키에 다른 주문을 보낼 수 없습니다.');
       } else {
+        if(pickupDate) {
+          const pickup=await holidays.checkPickup(pickupDate);
+          if(!pickup.available) throw Object.assign(failure(409,'휴무일에는 픽업할 수 없습니다.'),{nextAvailableDate:pickup.nextAvailableDate});
+        }
         let total=0;
         const prices=[];
         for(const item of items) {
@@ -59,7 +67,7 @@ function createApp(deps) {
           total+=product.price*item.quantity;prices.push(product.price);
           await client.query('UPDATE products SET stock=stock-$1 WHERE id=$2',[item.quantity,item.productId]);
         }
-        row=(await client.query('INSERT INTO orders(id,pickup_code,request_key,total) VALUES($1,$2,$3,$4) RETURNING *',[randomUUID(),String(randomInt(100000,1000000)),key,total])).rows[0];
+        row=(await client.query('INSERT INTO orders(id,pickup_code,request_key,total,pickup_date) VALUES($1,$2,$3,$4,$5) RETURNING *',[randomUUID(),String(randomInt(100000,1000000)),key,total,pickupDate])).rows[0];
         for(let i=0;i<items.length;i++) await client.query('INSERT INTO order_items(order_id,product_id,quantity,unit_price) VALUES($1,$2,$3,$4)',[row.id,items[i].productId,items[i].quantity,prices[i]]);
         await client.query('INSERT INTO order_outbox(id,order_id,kind,payload) VALUES($1,$2,$3,$4)',[randomUUID(),row.id,'order.received',JSON.stringify(output(row))]);
       }
@@ -91,7 +99,7 @@ function createApp(deps) {
     res.json(await events.find({orderId:req.params.id},{projection:{_id:0}}).sort({createdAt:1}).toArray());
   });
   app.use((_req,res)=>res.status(404).json({error:'경로가 없습니다.'}));
-  app.use((error,_req,res,_next)=>res.status(error.status || 500).json({error:error.status ? (error.type==='entity.parse.failed'?'JSON 형식을 확인해 주세요.':error.message) : '요청을 처리하지 못했습니다.'}));
+  app.use((error,_req,res,_next)=>res.status(error.status || 500).json({error:error.status ? (error.type==='entity.parse.failed'?'JSON 형식을 확인해 주세요.':error.message) : '요청을 처리하지 못했습니다.',...(error.nextAvailableDate?{nextAvailableDate:error.nextAvailableDate}:{})}));
   return app;
 }
 module.exports = {createApp};
