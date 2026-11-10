@@ -91,7 +91,7 @@ npm run build
 
 `npm test`는 테스트 전용 데이터베이스의 주문·이력·캐시를 초기화합니다. 운영 데이터에 연결하지 마세요.
 검증 항목은 캐시·주문 접수·메일 로컬 수신·중복 요청·동시 요청·재고 부족·롤백·상태 전이·outbox 재시도입니다.
-CI는 테스트용 서비스 컨테이너를 사용합니다. 게시 전이므로 원격 CI 실행 결과는 아직 없습니다.
+CI는 GitHub Actions에서 테스트용 서비스 컨테이너(PostgreSQL·MongoDB 7.0·Redis)로 실행되며, `main`의 최신 실행(`checks`)은 성공했습니다. 실행 기록은 Actions 탭에서 확인할 수 있습니다.
 
 검증 PC에는 Docker가 없어 Compose·Nginx 실기동을 수행하지 못했습니다.
 Windows PostgreSQL 바이너리 초기화도 제한 토큰 오류로 실패했습니다.
