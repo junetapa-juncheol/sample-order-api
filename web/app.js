@@ -1,4 +1,5 @@
 import './style.css';
+import holidayFixtures from '../fixtures/01_holidays.json';
 const labels={received:'접수',preparing:'준비 중',ready:'픽업 대기',collected:'완료'};
 const next={received:'preparing',preparing:'ready',ready:'collected'};
 const actions={received:'준비 시작하기',preparing:'픽업 준비 완료',ready:'픽업 완료하기'};
@@ -33,9 +34,30 @@ el('new-order').addEventListener('click',()=>{
 });
 const symbols=['◒','◓','◰','◩'];
 el('product-list').innerHTML=data.products.map((p,i)=>`<article class="product"><div class="bread-symbol tone-${i}" aria-hidden="true">${symbols[i]}</div><div><h3>${p.name}</h3><p>${p.category} <span>· ${money(p.price)}원</span></p></div><span class="stock">${p.stock}개 남음</span></article>`).join('');
-const descriptions={products:'상품과 현재 재고 조회 · Redis 30초 캐시 · X-Cache: HIT 또는 MISS',orders:'Idempotency-Key 헤더 필수 · { items: [{ productId: 1, quantity: 2 }] } · SQL 트랜잭션으로 접수',status:'received → preparing → ready → collected · { status: "preparing" } · 단계 건너뛰기 409',history:'MongoDB order_events 조회 · PostgreSQL outbox에서 재시도하여 기록',health:'PostgreSQL · MongoDB · Redis 연결 점검 · 장애 시 503'};
+const descriptions={pickupDays:'공휴일·주말 제외 · month=2026-12 · 목업 표본 · 실제 조회 시 Redis 하루 캐시',products:'상품과 현재 재고 조회 · Redis 30초 캐시 · X-Cache: HIT 또는 MISS',orders:'Idempotency-Key 헤더 필수 · { items: [{ productId: 1, quantity: 2 }] } · SQL 트랜잭션으로 접수',status:'received → preparing → ready → collected · { status: "preparing" } · 단계 건너뛰기 409',history:'MongoDB order_events 조회 · PostgreSQL outbox에서 재시도하여 기록',health:'PostgreSQL · MongoDB · Redis 연결 점검 · 장애 시 503'};
 let json='';
 function showEndpoint(name){json=JSON.stringify(data.responses[name],null,2);el('api-response').textContent=json;el('endpoint-description').textContent=descriptions[name];el('code-label').textContent=`RESPONSE · ${name==='orders'?'201 CREATED':'200 OK'}`;}
 document.querySelectorAll('[data-endpoint]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('[data-endpoint]').forEach(x=>x.classList.toggle('active',b===x));showEndpoint(b.dataset.endpoint);}));
 el('copy-code').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(json);announce('JSON 응답을 복사했습니다.');}catch{announce('브라우저에서 복사를 허용해 주세요.');}});
+
+function renderPickupDays(){
+  const month=el('pickup-month').value;
+  const items=holidayFixtures[month].response.body.items.item;
+  const count=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5)),0)).getUTCDate();
+  const days=Array.from({length:count},(_,index)=>{
+    const date=`${month}-${String(index+1).padStart(2,'0')}`;
+    const holiday=items.find(item=>String(item.locdate)===date.replaceAll('-','')&&item.isHoliday==='Y');
+    const weekend=[0,6].includes(new Date(date+'T00:00:00Z').getUTCDay());
+    return {date,available:!holiday&&!weekend,reason:holiday?.dateName||(weekend?'주말':null)};
+  });
+  el('pickup-days').innerHTML=days.map(day=>`<span class="pickup-day ${day.available?'open':'closed'}" title="${day.date} · ${day.reason||'픽업 가능'}" aria-label="${day.date} ${day.available?'픽업 가능':day.reason+' 휴무'}">${Number(day.date.slice(8))}<small>${day.available?'가능':'휴무'}</small></span>`).join('');
+  el('pickup-summary').textContent=`${month} · 픽업 가능 ${days.filter(day=>day.available).length}일 · 휴무일에 주문하면 다음 영업일을 안내합니다.`;
+  data.responses.pickupDays={month,mode:'mock',days};
+  if(document.querySelector('[data-endpoint="pickupDays"].active')) showEndpoint('pickupDays');
+}
+el('pickup-month').innerHTML=Object.keys(holidayFixtures).map(month=>`<option value="${month}">${month}</option>`).join('');
+el('pickup-month').value='2026-12';
+el('pickup-month').addEventListener('change',renderPickupDays);
+renderPickupDays();
+
 render();showEndpoint('products');
