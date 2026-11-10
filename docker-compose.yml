@@ -35,6 +35,7 @@ services:
       DATABASE_URL: postgresql://bakery@postgres:5432/bakery
       MONGO_URL: mongodb://mongo:27017
       REDIS_URL: redis://redis:6379
+      DATA_GO_KR_SERVICE_KEY: ${DATA_GO_KR_SERVICE_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
