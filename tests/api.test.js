@@ -106,3 +106,78 @@ test('SQL outbox survives Mongo failure and retry delivers the event',async()=>{
   expect(deps.mail.receipts).toHaveLength(1);
   warning.mockRestore();
 });
+
+test('pickup calendar uses mock data without a key',async()=>{
+  const response=await request(app).get('/api/pickup-days?month=2026-12');
+  expect(response.status).toBe(200);
+  expect(response.body.mode).toBe('mock');
+  expect(response.body.days.find(day=>day.date==='2026-12-25').available).toBe(false);
+  expect((await request(app).get('/api/pickup-days?month=2026-13')).status).toBe(400);
+  expect((await request(app).get('/api/pickup-days')).status).toBe(400);
+  expect((await request(app).get('/api/pickup-days?month=2028-12')).status).toBe(503);
+});
+test('holiday rejection suggests Monday without changing stock or writing events',async()=>{
+  const response=await place('pickup-holiday-001',{...payload,pickupDate:'2026-12-25'});
+  expect(response.status).toBe(409);
+  expect(response.body.nextAvailableDate).toBe('2026-12-28');
+  expect((await deps.pg.query('SELECT stock FROM products WHERE id=1')).rows[0].stock).toBe(36);
+  expect((await deps.pg.query('SELECT count(*) FROM orders')).rows[0].count).toBe('0');
+  expect(await deps.events.countDocuments({})).toBe(0);
+  expect(deps.mail.receipts).toHaveLength(0);
+});
+test('pickup date persists in orders, history and idempotent replay',async()=>{
+  const dated={...payload,pickupDate:'2026-12-28'};
+  const first=await place('pickup-open-001',dated);
+  expect(first.status).toBe(201);expect(first.body.pickupDate).toBe('2026-12-28');
+  const replay=await place('pickup-open-001',dated);
+  expect(replay.status).toBe(200);expect(replay.body.replayed).toBe(true);
+  expect((await request(app).get('/api/orders')).body[0].pickupDate).toBe('2026-12-28');
+  const history=await request(app).get(`/api/orders/${first.body.id}/history`);
+  expect(history.body[0].pickupDate).toBe('2026-12-28');
+  expect(deps.mail.receipts).toHaveLength(1);
+  expect((await place('pickup-open-001',{...payload,pickupDate:'2026-12-29'})).status).toBe(409);
+  expect((await place('pickup-open-001',payload)).status).toBe(409);
+});
+test('weekend and invalid pickup dates are rejected',async()=>{
+  const weekend=await place('pickup-weekend-001',{...payload,pickupDate:'2026-12-26'});
+  expect(weekend.status).toBe(409);expect(weekend.body.nextAvailableDate).toBe('2026-12-28');
+  expect((await place('pickup-invalid-001',{...payload,pickupDate:'2026-02-30'})).status).toBe(400);
+  expect((await place('pickup-invalid-001',{...payload,pickupDate:20261228})).status).toBe(400);
+});
+test('live failure gives 503 for calendar and order without accepting a holiday',async()=>{
+  const {createHolidays}=require('../src/kr/holidays');
+  const fetchImpl=jest.fn(async()=>{throw Error('offline');});
+  const holidays=createHolidays({serviceKey:'test-only',fetchImpl,redis:deps.redis});
+  await deps.redis.del('kr:holidays:live:v1:2026-12');
+  const failed=createApp({...deps,holidays});
+  expect((await request(failed).get('/api/pickup-days?month=2026-12')).status).toBe(503);
+  const response=await request(failed).post('/api/orders').set('Idempotency-Key','pickup-live-error').send({...payload,pickupDate:'2026-12-28'});
+  expect(response.status).toBe(503);
+  expect((await deps.pg.query('SELECT count(*) FROM orders')).rows[0].count).toBe('0');
+});
+test('live calendar uses Redis for one day and saved orders replay during an outage',async()=>{
+  const {XMLBuilder}=require('fast-xml-parser');
+  const {createHolidays}=require('../src/kr/holidays');
+  const fixture=require('../fixtures/01_holidays.json');
+  await deps.redis.del('kr:holidays:live:v1:2026-12');
+  const fetchImpl=jest.fn(async()=>({ok:true,text:async()=>new XMLBuilder().build(fixture['2026-12'])}));
+  const holidays=createHolidays({serviceKey:'test-only',fetchImpl,redis:deps.redis});
+  const liveApp=createApp({...deps,holidays});
+  const dated={...payload,pickupDate:'2026-12-28'};
+  const send=()=>request(liveApp).post('/api/orders').set('Idempotency-Key','pickup-live-replay').send(dated);
+  expect((await send()).status).toBe(201);
+  expect((await request(liveApp).get('/api/pickup-days?month=2026-12')).status).toBe(200);
+  expect(fetchImpl).toHaveBeenCalledTimes(1);
+  expect(await deps.redis.ttl('kr:holidays:live:v1:2026-12')).toBeGreaterThan(86390);
+  await deps.redis.del('kr:holidays:live:v1:2026-12');
+  fetchImpl.mockRejectedValue(Error('offline'));
+  const replay=await send();
+  expect(replay.status).toBe(200);expect(replay.body.replayed).toBe(true);
+  expect(fetchImpl).toHaveBeenCalledTimes(1);
+});
+test('pickup column migration is repeatable and preserves saved dates',async()=>{
+  const first=await place('pickup-migrate-001',{...payload,pickupDate:'2026-12-28'});
+  await migrate(deps.pg);await migrate(deps.pg);
+  const row=(await deps.pg.query('SELECT pickup_date FROM orders WHERE id=$1',[first.body.id])).rows[0];
+  expect(row.pickup_date).toBe('2026-12-28');
+});
