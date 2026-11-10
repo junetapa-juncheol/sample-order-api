@@ -1,0 +1,209 @@
+{
+  "orders": [
+    {
+      "id": "demo-1",
+      "pickupCode": "1048",
+      "time": "10:48",
+      "status": "received",
+      "items": [
+        {
+          "name": "소금 버터롤",
+          "quantity": 2,
+          "price": 3200
+        },
+        {
+          "name": "아몬드 크루아상",
+          "quantity": 1,
+          "price": 4800
+        }
+      ],
+      "total": 11200
+    },
+    {
+      "id": "demo-2",
+      "pickupCode": "1047",
+      "time": "10:43",
+      "status": "preparing",
+      "items": [
+        {
+          "name": "올리브 치아바타",
+          "quantity": 2,
+          "price": 4200
+        }
+      ],
+      "total": 8400
+    },
+    {
+      "id": "demo-3",
+      "pickupCode": "1046",
+      "time": "10:38",
+      "status": "ready",
+      "items": [
+        {
+          "name": "아몬드 크루아상",
+          "quantity": 1,
+          "price": 4800
+        },
+        {
+          "name": "레몬 파운드",
+          "quantity": 2,
+          "price": 3800
+        }
+      ],
+      "total": 12400
+    },
+    {
+      "id": "demo-4",
+      "pickupCode": "1045",
+      "time": "09:33",
+      "status": "preparing",
+      "items": [
+        {
+          "name": "소금 버터롤",
+          "quantity": 3,
+          "price": 3200
+        }
+      ],
+      "total": 9600
+    },
+    {
+      "id": "demo-5",
+      "pickupCode": "1044",
+      "time": "09:28",
+      "status": "received",
+      "items": [
+        {
+          "name": "레몬 파운드",
+          "quantity": 2,
+          "price": 3800
+        }
+      ],
+      "total": 7600
+    },
+    {
+      "id": "demo-6",
+      "pickupCode": "1043",
+      "time": "09:23",
+      "status": "ready",
+      "items": [
+        {
+          "name": "소금 버터롤",
+          "quantity": 1,
+          "price": 3200
+        },
+        {
+          "name": "올리브 치아바타",
+          "quantity": 1,
+          "price": 4200
+        }
+      ],
+      "total": 7400
+    },
+    {
+      "id": "demo-7",
+      "pickupCode": "1042",
+      "time": "08:18",
+      "status": "collected",
+      "items": [
+        {
+          "name": "아몬드 크루아상",
+          "quantity": 2,
+          "price": 4800
+        }
+      ],
+      "total": 9600
+    },
+    {
+      "id": "demo-8",
+      "pickupCode": "1041",
+      "time": "08:13",
+      "status": "preparing",
+      "items": [
+        {
+          "name": "소금 버터롤",
+          "quantity": 1,
+          "price": 3200
+        },
+        {
+          "name": "아몬드 크루아상",
+          "quantity": 1,
+          "price": 4800
+        }
+      ],
+      "total": 8000
+    }
+  ],
+  "products": [
+    {
+      "id": 1,
+      "name": "소금 버터롤",
+      "price": 3200,
+      "stock": 36,
+      "category": "식사빵"
+    },
+    {
+      "id": 2,
+      "name": "아몬드 크루아상",
+      "price": 4800,
+      "stock": 18,
+      "category": "페이스트리"
+    },
+    {
+      "id": 3,
+      "name": "올리브 치아바타",
+      "price": 4200,
+      "stock": 24,
+      "category": "식사빵"
+    },
+    {
+      "id": 4,
+      "name": "레몬 파운드",
+      "price": 3800,
+      "stock": 16,
+      "category": "구움과자"
+    }
+  ],
+  "responses": {
+    "products": [
+      {
+        "id": 1,
+        "name": "소금 버터롤",
+        "price": 3200,
+        "stock": 36,
+        "category": "식사빵"
+      },
+      {
+        "id": 2,
+        "name": "아몬드 크루아상",
+        "price": 4800,
+        "stock": 18,
+        "category": "페이스트리"
+      }
+    ],
+    "orders": {
+      "id": "9b8f205e-5523-48ac-9458-fd7f4e31c303",
+      "pickupCode": "1048",
+      "status": "received",
+      "total": 6400,
+      "createdAt": "2026-11-10T01:48:00.000Z",
+      "replayed": false
+    },
+    "status": {
+      "id": "9b8f205e-5523-48ac-9458-fd7f4e31c303",
+      "pickupCode": "1048",
+      "status": "preparing",
+      "total": 6400
+    },
+    "history": [
+      {
+        "orderId": "9b8f205e-5523-48ac-9458-fd7f4e31c303",
+        "kind": "order.received",
+        "status": "received",
+        "createdAt": "2026-11-10T01:48:00.000Z"
+      }
+    ],
+    "health": {
+      "status": "ok"
+    }
+  }
+}
