@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS orders (
   total integer NOT NULL CHECK (total > 0),
   created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_date text CHECK (pickup_date IS NULL OR pickup_date ~ '^20[0-9]{2}-[0-9]{2}-[0-9]{2}$');
 CREATE TABLE IF NOT EXISTS order_items (
   order_id uuid NOT NULL REFERENCES orders(id),
   product_id integer NOT NULL REFERENCES products(id),
